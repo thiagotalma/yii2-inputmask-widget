@@ -26,6 +26,12 @@ class InputMask extends InputWidget
      * @var string Mask to apply
      */
     public $mask;
+
+    /**
+     * @var string Hash of mask options
+     */
+    public $hashMask;
+
     /**
      * @var string Alias to Mask to apply
      */
@@ -61,12 +67,14 @@ class InputMask extends InputWidget
      */
     public function run()
     {
+        $this->registerClientScript();
+        $this->options['data-mask'] = $this->hashMask;
+
         if ($this->hasModel()) {
             echo Html::activeTextInput($this->model, $this->attribute, $this->options);
         } else {
             echo Html::textInput($this->name, $this->value, $this->options);
         }
-        $this->registerClientScript();
     }
 
     /**
@@ -75,10 +83,12 @@ class InputMask extends InputWidget
     public function registerClientScript()
     {
         $options = $this->getClientOptions();
+        $this->hashMask = 'mask_' . hash('adler32', serialize($options));
         $js = '';
         $id = $this->options['id'];
-        $js .= "jQuery(\"#{$id}\").inputmask({$options});";
         $view = $this->getView();
+        $view->registerJs("var {$this->hashMask} = {$options};", $view::POS_HEAD);
+        $js .= "jQuery(\"#{$id}\").inputmask({$this->hashMask});";
         InputMaskAsset::register($view);
         $view->registerJs($js);
     }
