@@ -19,7 +19,11 @@ use yii\web\AssetBundle;
 class InputMaskAsset extends AssetBundle
 {
     public $js = [
-        'jquery.inputmask.bundle.js',
+        'jquery.inputmask.js',
+        'jquery.inputmask.extensions.js',
+        'jquery.inputmask.date.extensions.js',
+        'jquery.inputmask.numeric.extensions.js',
+        'jquery.inputmask.regex.extensions.js'
     ];
     public $depends = [
         'yii\web\JqueryAsset',
