@@ -83,7 +83,7 @@ class InputMask extends InputWidget
     public function registerClientScript()
     {
         $options = $this->getClientOptions();
-        $this->hashMask = 'mask_' . hash('adler32', serialize($options));
+        $this->hashMask = 'mask_' . hash('crc32', serialize($options));
         $js = '';
         $id = $this->options['id'];
         $view = $this->getView();
