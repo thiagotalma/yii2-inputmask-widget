@@ -68,7 +68,9 @@ class InputMask extends InputWidget
     public function run()
     {
         $this->registerClientScript();
-        $this->options['data-mask'] = $this->hashMask;
+
+        $this->options['data-pluginname'] = 'inputmask';
+        $this->options['data-pluginoptions'] = $this->hashMask;
 
         if ($this->hasModel()) {
             echo Html::activeTextInput($this->model, $this->attribute, $this->options);
@@ -83,7 +85,7 @@ class InputMask extends InputWidget
     public function registerClientScript()
     {
         $options = $this->getClientOptions();
-        $this->hashMask = 'mask_' . hash('crc32', serialize($options));
+        $this->hashMask = 'inputmask_' . hash('crc32', serialize($options));
         $js = '';
         $id = $this->options['id'];
         $view = $this->getView();
