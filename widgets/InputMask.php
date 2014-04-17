@@ -69,8 +69,8 @@ class InputMask extends InputWidget
     {
         $this->registerClientScript();
 
-        $this->options['data-pluginname'] = 'inputmask';
-        $this->options['data-pluginoptions'] = $this->hashMask;
+        $this->options['data-plugin-name'] = 'inputmask';
+        $this->options['data-plugin-options'] = $this->hashMask;
 
         if ($this->hasModel()) {
             echo Html::activeTextInput($this->model, $this->attribute, $this->options);
