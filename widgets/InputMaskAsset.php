@@ -18,13 +18,6 @@ use yii\web\AssetBundle;
  */
 class InputMaskAsset extends AssetBundle
 {
-    public $js = [
-        'jquery.inputmask.js',
-        'jquery.inputmask.extensions.js',
-        'jquery.inputmask.date.extensions.js',
-        'jquery.inputmask.numeric.extensions.js',
-        'jquery.inputmask.regex.extensions.js'
-    ];
     public $depends = [
         'yii\web\JqueryAsset',
     ];
@@ -34,6 +27,7 @@ class InputMaskAsset extends AssetBundle
      */
     public function init()
     {
+        $this->$js = 'jquery.inputmask.bundle' . (YII_DEBUG ? '' : '.min') . '.js';
         $this->sourcePath = __DIR__ . '/../assets';
         parent::init();
     }
