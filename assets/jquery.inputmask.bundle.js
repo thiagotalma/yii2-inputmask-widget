@@ -3,7 +3,7 @@
 * http://github.com/RobinHerbots/jquery.inputmask
 * Copyright (c) 2010 - 2014 Robin Herbots
 * Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-* Version: 3.0.34
+* Version: 3.0.39
 */
 
 (function ($) {
@@ -523,7 +523,7 @@
             function refreshFromBuffer(start, end) {
                 var buffer = getBuffer().slice(); //work on clone
                 for (var i = start; i < end; i++) {
-                    if (buffer[i] != getPlaceholder(i) && buffer[i] != opts.skipOptionalPartCharacter) {
+                    if (buffer[i] != opts.skipOptionalPartCharacter) {
                         isValid(i, buffer[i], true, true);
                     }
                 }
@@ -586,14 +586,18 @@
                                     return false;//breakout if refreshFromBuffer && nothing to insert
                                 }
                                 validatedPos = rslt.pos != undefined ? rslt.pos : position;
-                                if (validatedPos != position)
-                                    tst = getTests(validatedPos)[0]; //possible mismatch TODO
+                                if (validatedPos != position) {
+                                    rslt = isValid(validatedPos, elem, true); //revalidate new position strict
+                                    return false;
+                                }
 
                             } else if (rslt !== true && rslt["pos"] != position) { //their is a position offset
                                 validatedPos = rslt["pos"];
                                 refreshFromBuffer(position, validatedPos);
-                                if (validatedPos != position)
-                                    tst = getTests(validatedPos)[0]; //possible mismatch TODO
+                                if (validatedPos != position) {
+                                    rslt = isValid(validatedPos, elem, true); //revalidate new position strict
+                                    return false;
+                                }
                             }
                             if (ndx > 0) {
                                 resetMaskSet(true);
@@ -714,26 +718,6 @@
             function truncateInput(inputValue) {
                 return inputValue.replace(new RegExp("(" + escapeRegex(getBufferTemplate().join('')) + ")*$"), "");
             }
-
-            function clearOptionalTail(input) {
-                var buffer = getBuffer(), tmpBuffer = buffer.slice(),
-                    pos, lvp = getLastValidPosition(), positions = {},
-                    ndxIntlzr = getMaskSet()["validPositions"][lvp] != undefined ? getMaskSet()["validPositions"][lvp]["locator"].slice() : undefined, testPos;
-                for (pos = lvp + 1; pos < tmpBuffer.length; pos++) {
-                    testPos = getTestTemplate(pos, ndxIntlzr, pos - 1);
-                    ndxIntlzr = testPos["locator"].slice();
-                    positions[pos] = testPos;
-                }
-
-                for (pos = tmpBuffer.length - 1; pos > lvp; pos--) {
-                    testPos = positions[pos]["match"];
-                    if (testPos.optionality && tmpBuffer[pos] == getPlaceholder(pos, testPos)) {
-                        tmpBuffer.pop();
-                    } else break;
-                }
-                writeBuffer(input, tmpBuffer);
-            }
-
             function unmaskedvalue($input, skipDatepickerCheck) {
                 if ($input.data('_inputmask') && (skipDatepickerCheck === true || !$input.hasClass('hasDatepicker'))) {
                     var umValue = [], vps = getMaskSet()["validPositions"];
@@ -749,7 +733,6 @@
                     return $input[0]._valueGet();
                 }
             }
-
             function TranslatePosition(pos) {
                 if (isRTL && typeof pos == 'number' && (!opts.greedy || opts.placeholder != "")) {
                     var bffrLght = getBuffer().length;
@@ -757,7 +740,6 @@
                 }
                 return pos;
             }
-
             function caret(input, begin, end) {
                 var npt = input.jquery && input.length > 0 ? input[0] : input, range;
                 if (typeof begin == 'number') {
@@ -805,19 +787,44 @@
                     return { "begin": begin, "end": end };
                 }
             }
+            function determineLastRequiredPosition(returnDefinition) {
+                var buffer = getBuffer(), bl = buffer.length,
+                   pos, lvp = getLastValidPosition(), positions = {},
+                   ndxIntlzr = getMaskSet()["validPositions"][lvp] != undefined ? getMaskSet()["validPositions"][lvp]["locator"].slice() : undefined, testPos;
+                for (pos = lvp + 1; pos < buffer.length; pos++) {
+                    testPos = getTestTemplate(pos, ndxIntlzr, pos - 1);
+                    ndxIntlzr = testPos["locator"].slice();
+                    positions[pos] = $.extend(true, {}, testPos);
+                }
 
+                for (pos = bl - 1; pos > lvp; pos--) {
+                    testPos = positions[pos]["match"];
+                    if ((testPos.optionality || testPos.optionalQuantifier) && buffer[pos] == getPlaceholder(pos, testPos)) {
+                        bl--;
+                    } else break;
+                }
+                return returnDefinition ? { "l": bl, "def": positions[bl] ? positions[bl]["match"] : undefined } : bl;
+            }
+            function clearOptionalTail(input) {
+                var buffer = getBuffer(), tmpBuffer = buffer.slice();
+                var rl = determineLastRequiredPosition();
+                tmpBuffer.length = rl;
+                writeBuffer(input, tmpBuffer);
+            }
             function isComplete(buffer) { //return true / false / undefined (repeat *)
                 if ($.isFunction(opts.isComplete)) return opts.isComplete.call($el, buffer, opts);
                 if (opts.repeat == "*") return undefined;
-                var complete = false,
-                    aml = seekPrevious(getMaskLength());
-                if (getLastValidPosition() == aml) {
-                    complete = true;
-                    for (var i = 0; i <= aml; i++) {
-                        var mask = isMask(i);
-                        if ((mask && (buffer[i] == undefined || buffer[i] == getPlaceholder(i))) || (!mask && buffer[i] != getPlaceholder(i))) {
-                            complete = false;
-                            break;
+                var complete = false, lrp = determineLastRequiredPosition(true), aml = seekPrevious(lrp["l"]), lvp = getLastValidPosition();
+
+                if (lvp == aml) {
+                    if (lrp["def"] == undefined || lrp["def"].newBlockMarker || lrp["def"].optionalQuantifier) {
+                        complete = true;
+                        for (var i = 0; i <= aml; i++) {
+                            var mask = isMask(i);
+                            if ((mask && (buffer[i] == undefined || buffer[i] == getPlaceholder(i))) || (!mask && buffer[i] != getPlaceholder(i))) {
+                                complete = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1357,14 +1364,20 @@
                     if (activeElement === el) { //position the caret when in focus
                         $el.addClass('focus.inputmask');
                         caret(el, seekNext(getLastValidPosition()));
-                    } else if (opts.clearMaskOnLostFocus) {
-                        if (getBuffer().join('') == getBufferTemplate().join('')) {
-                            el._valueSet('');
-                        } else {
-                            clearOptionalTail(el);
-                        }
                     } else {
-                        writeBuffer(el, getBuffer());
+                        if (isComplete(getBuffer()) === false) {
+                            if (opts.clearIncomplete)
+                                resetMaskSet();
+                        }
+                        if (opts.clearMaskOnLostFocus) {
+                            if (getBuffer().join('') == getBufferTemplate().join('')) {
+                                el._valueSet('');
+                            } else {
+                                clearOptionalTail(el);
+                            }
+                        } else {
+                            writeBuffer(el, getBuffer());
+                        }
                     }
 
                     installEventRuler(el);
@@ -1651,7 +1664,7 @@
 * http://github.com/RobinHerbots/jquery.inputmask
 * Copyright (c) 2010 - 2014 Robin Herbots
 * Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-* Version: 3.0.34
+* Version: 3.0.39
 */
 
 (function ($) {
@@ -2016,7 +2029,7 @@ Input Mask plugin extensions
 http://github.com/RobinHerbots/jquery.inputmask
 Copyright (c) 2010 - 2014 Robin Herbots
 Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-Version: 3.0.34
+Version: 3.0.39
 
 Optional extensions on the jquery.inputmask base
 */
@@ -2137,7 +2150,7 @@ Input Mask plugin extensions
 http://github.com/RobinHerbots/jquery.inputmask
 Copyright (c) 2010 - 2014 Robin Herbots
 Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-Version: 3.0.34
+Version: 3.0.39
 
 Optional extensions on the jquery.inputmask base
 */
@@ -2600,7 +2613,7 @@ Input Mask plugin extensions
 http://github.com/RobinHerbots/jquery.inputmask
 Copyright (c) 2010 - 2014 Robin Herbots
 Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-Version: 3.0.34
+Version: 3.0.39
 
 Optional extensions on the jquery.inputmask base
 */
@@ -2665,7 +2678,7 @@ Optional extensions on the jquery.inputmask base
             rightAlign: true,
             postFormat: function (buffer, pos, reformatOnly, opts) {
                 var needsRefresh = false;
-                if (opts.groupSeparator == "") return { pos: pos };
+                if (opts.groupSeparator == "" || ($.inArray(opts.radixPoint, buffer) != -1 && pos >= $.inArray(opts.radixPoint, buffer))) return { pos: pos };
                 var cbuf = buffer.slice();
                 if (!reformatOnly) {
                     cbuf.splice(pos, 0, "?"); //set position indicator
@@ -2728,18 +2741,19 @@ Optional extensions on the jquery.inputmask base
                     validator: function (chrs, buffer, pos, strict, opts) {
                         var isValid = opts.negationhandler(chrs, buffer, pos, strict, opts);
                         if (!isValid) {
-                            //handle 0 for integerpart
-                            //if (!strict && chrs === "0") {
-                            //    var matchRslt = buffer.join('').match(opts.regex.integerPart(opts));
-                            //    if (matchRslt && matchRslt[matchRslt.index].indexOf("0") == -1) {
-                            //        return false;
-                            //    }
-                            //}
-
                             isValid = strict ? new RegExp("[0-9" + $.inputmask.escapeRegex.call(this, opts.groupSeparator) + "]").test(chrs) : new RegExp("[0-9]").test(chrs);
 
+                            //handle 0 for integerpart
+                            if (isValid != false) {
+                                var matchRslt = buffer.join('').match(opts.regex.integerPart(opts)), radixPosition = $.inArray(opts.radixPoint, buffer);
+                                if (matchRslt && matchRslt["0"][0] == "0" && pos >= opts.prefix.length && (radixPosition == -1 || pos < radixPosition)) {
+                                    buffer.splice(matchRslt.index, 1);
+                                } else if (chrs == "0" && matchRslt && matchRslt["0"].length > 0 && pos == opts.prefix.length) {
+                                    return false;
+                                }
+                            }
                             if (isValid != false && !strict && chrs != opts.radixPoint && opts.autoGroup === true) {
-                                return opts.postFormat(buffer, pos, (chrs == "-" || chrs == "+") ? true : false, opts);
+                                isValid = opts.postFormat(buffer, pos, (chrs == "-" || chrs == "+") ? true : false, opts);
                             }
                         }
                         return isValid;
@@ -2761,7 +2775,22 @@ Optional extensions on the jquery.inputmask base
                 }
             },
             insertMode: true,
-            autoUnmask: false
+            autoUnmask: false,
+            onUnMask: function (maskedValue, unmaskedValue, opts) {
+                var processValue = maskedValue.replace(opts.prefix, "");
+                processValue = processValue.replace(opts.suffix, "");
+                processValue = processValue.replace(new RegExp(opts.groupSeparator, "g"), "");
+                processValue = processValue.replace(opts.radixPoint, ".");
+                return Number(processValue);
+            },
+            isComplete: function (buffer, opts) {
+                var maskedValue = buffer.join('');
+                var processValue = maskedValue.replace(opts.prefix, "");
+                processValue = processValue.replace(opts.suffix, "");
+                processValue = processValue.replace(new RegExp(opts.groupSeparator, "g"), "");
+                processValue = processValue.replace(opts.radixPoint, ".");
+                return isFinite(processValue);
+            }
         },
         'decimal': {
             alias: "numeric"
@@ -2777,7 +2806,7 @@ Input Mask plugin extensions
 http://github.com/RobinHerbots/jquery.inputmask
 Copyright (c) 2010 - 2014 Robin Herbots
 Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-Version: 3.0.34
+Version: 3.0.39
 
 Regex extensions on the jquery.inputmask base
 Allows for using regular expressions as a mask
@@ -2964,7 +2993,7 @@ Input Mask plugin extensions
 http://github.com/RobinHerbots/jquery.inputmask
 Copyright (c) 2010 - 2014 Robin Herbots
 Licensed under the MIT license (http://www.opensource.org/licenses/mit-license.php)
-Version: 3.0.34
+Version: 3.0.39
 
 Phone extension.
 When using this extension make sure you specify the correct url to get the masks
