@@ -4,7 +4,7 @@
     "keywords": ["yii2", "extension", "widget", "mask", "jquery.inputmask"],
     "homepage": "https://github.com/thiagotalma/yii2-inputmask-widget",
     "type": "yii2-extension",
-    "license": "BSD 3-Clause",
+    "license": "MIT",
     "authors": [
         {
             "name": "Thiago Talma",
